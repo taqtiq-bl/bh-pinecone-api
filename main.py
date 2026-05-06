@@ -17,12 +17,12 @@ def search():
     region = data.get('region')
     top_k = data.get('limit', 100)
     
-    # Filter aufbauen
+    # Filter aufbauen - nur wenn Werte vorhanden und nicht leer
     filter_dict = {}
-    if segment:
-        filter_dict['segment'] = {'$eq': segment}
-    if region:
-        filter_dict['region'] = {'$eq': region}
+    if segment and segment.strip():
+        filter_dict['segment'] = segment.strip()
+    if region and region.strip():
+        filter_dict['region'] = region.strip()
     
     # Zuerst Embedding generieren via Pinecone Inference
     embedding_response = pc.inference.embed(
@@ -34,12 +34,17 @@ def search():
     query_vector = embedding_response.data[0].values
     
     # Dann mit Vektor suchen
-    results = index.query(
-        vector=query_vector,
-        top_k=top_k,
-        include_metadata=True,
-        filter=filter_dict if filter_dict else None
-    )
+    query_params = {
+        "vector": query_vector,
+        "top_k": top_k,
+        "include_metadata": True
+    }
+    
+    # Filter nur hinzufügen wenn nicht leer
+    if filter_dict:
+        query_params["filter"] = filter_dict
+    
+    results = index.query(**query_params)
     
     # Ergebnisse formatieren
     hits = []
