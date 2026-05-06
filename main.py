@@ -24,23 +24,29 @@ def search():
     if region:
         filter_dict['region'] = {'$eq': region}
     
-    # Pinecone Suche mit integrated inference
-    results = index.search(
-        namespace='',
-        query={
-            'top_k': top_k,
-            'inputs': {'text': suchbegriff},
-            'filter': filter_dict if filter_dict else None
-        },
-        fields=['firma', 'kbo_nummer', 'segment', 'nace_codes', 'adresse', 'plz', 'stadt', 'region', 'sprache']
+    # Zuerst Embedding generieren via Pinecone Inference
+    embedding_response = pc.inference.embed(
+        model="llama-text-embed-v2",
+        inputs=[suchbegriff],
+        parameters={"input_type": "query"}
+    )
+    
+    query_vector = embedding_response.data[0].values
+    
+    # Dann mit Vektor suchen
+    results = index.query(
+        vector=query_vector,
+        top_k=top_k,
+        include_metadata=True,
+        filter=filter_dict if filter_dict else None
     )
     
     # Ergebnisse formatieren
     hits = []
-    for hit in results.result.hits:
+    for match in results.matches:
         hits.append({
-            'score': hit.score,
-            **hit.fields
+            'score': match.score,
+            **match.metadata
         })
     
     return jsonify({
