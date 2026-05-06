@@ -25,7 +25,7 @@ def search():
         filter_dict['region'] = {'$eq': region}
     
     # Pinecone Suche mit integrated inference
-    results = index.search_records(
+    results = index.search(
         namespace='',
         query={
             'top_k': top_k,
