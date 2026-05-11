@@ -99,4 +99,3 @@ def debug():
 @app.route('/logo.jpg')
 def logo():
     ...
-Commit → warten → dann https://bh-pinecone-api-production.up.railway.app/debug öffnen.Sonnet 4.6
