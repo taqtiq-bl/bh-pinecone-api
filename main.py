@@ -91,8 +91,5 @@ def health():
 
 @app.route('/logo.jpg')
 def logo():
-    return send_from_directory('.', 'Logo_b+h_Claim_flaeche_farbe.jpg')
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(base_dir, 'Logo_b+h_Claim_flaeche_farbe.jpg')
