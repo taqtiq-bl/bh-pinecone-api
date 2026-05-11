@@ -98,4 +98,5 @@ def debug():
 
 @app.route('/logo.jpg')
 def logo():
+    return send_from_directory('/app', 'Logo_b+h_Claim_flaeche_farbe.jpg')
     ...
