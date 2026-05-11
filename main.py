@@ -89,7 +89,14 @@ def search():
 def health():
     return jsonify({'status': 'ok'})
 
+@app.route('/debug')
+def debug():
+    import glob
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    files = glob.glob(base_dir + '/*')
+    return jsonify({'base_dir': base_dir, 'files': files})
+
 @app.route('/logo.jpg')
 def logo():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(base_dir, 'Logo_b+h_Claim_flaeche_farbe.jpg')
+    ...
+Commit → warten → dann https://bh-pinecone-api-production.up.railway.app/debug öffnen.Sonnet 4.6
