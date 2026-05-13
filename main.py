@@ -100,6 +100,25 @@ def debug():
     files = glob.glob(base_dir + '/*')
     return jsonify({'base_dir': base_dir, 'files': files})
 
+@app.route('/debug-plz', methods=['GET'])
+def debug_plz():
+    # Fetch a few records to see PLZ format
+    results = index.query(
+        vector=[0.0] * 1536,
+        top_k=5,
+        include_metadata=True,
+        filter={"region": "Flandre"}
+    )
+    plz_samples = [
+        {
+            "firma": m.metadata.get("firma"),
+            "plz": m.metadata.get("plz"),
+            "plz_type": type(m.metadata.get("plz")).__name__
+        }
+        for m in results.matches
+    ]
+    return jsonify({"samples": plz_samples})
+    
 @app.route('/logo.jpg')
 def logo():
     return send_from_directory('/app', 'Logo_b+h_Claim_flaeche_farbe.jpg')
