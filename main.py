@@ -56,7 +56,7 @@ def search():
     if region and region.strip():
         filter_dict['region'] = region.strip()
     if plz_von and plz_bis:
-        filter_dict['plz'] = {'$gte': str(plz_von), '$lte': str(plz_bis)}
+        filter_dict['plz'] = {'$gte': int(plz_von), '$lte': int(plz_bis)}
     
     embedding_response = pc.inference.embed(
         model="llama-text-embed-v2",
