@@ -102,9 +102,8 @@ def debug():
 
 @app.route('/debug-plz', methods=['GET'])
 def debug_plz():
-    # Fetch a few records to see PLZ format
     results = index.query(
-        vector=[0.0] * 1536,
+        vector=[0.0] * 1024,
         top_k=5,
         include_metadata=True,
         filter={"region": "Flandre"}
