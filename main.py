@@ -46,6 +46,8 @@ def search():
     suchbegriff = data.get('suchbegriff', '')
     segment = data.get('segment')
     region = data.get('region')
+    plz_von = data.get('plz_von')
+    plz_bis = data.get('plz_bis')
     top_k = data.get('limit', 100)
     
     filter_dict = {}
@@ -53,6 +55,8 @@ def search():
         filter_dict['segment'] = segment.strip()
     if region and region.strip():
         filter_dict['region'] = region.strip()
+    if plz_von and plz_bis:
+        filter_dict['plz'] = {'$gte': str(plz_von), '$lte': str(plz_bis)}
     
     embedding_response = pc.inference.embed(
         model="llama-text-embed-v2",
