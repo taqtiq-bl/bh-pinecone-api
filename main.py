@@ -6,15 +6,11 @@ import io
 
 app = Flask(__name__)
 
-# Pinecone Client initialisieren
 pc = Pinecone(api_key=os.environ.get('PINECONE_API_KEY'))
 index = pc.Index(host=os.environ.get('PINECONE_HOST'))
 
-# In-memory storage für PDFs (wird bei Restart geleert)
 pdf_storage = {}
 
-# === Provinz -> PLZ-Range-Mapping (BE) ===
-# Quelle: bpost / Statbel offizielle PLZ-Zuordnung
 PROVINZ_PLZ_RANGES = {
     "Bruxelles":         [("1000", "1299")],
     "Brabant Wallon":    [("1300", "1499")],
@@ -31,32 +27,20 @@ PROVINZ_PLZ_RANGES = {
 
 
 def build_plz_filter(provinz=None, plz_von=None, plz_bis=None):
-    """
-    Baut Pinecone-Filter für PLZ. Drei Modi:
-    1. Wenn `provinz` gegeben und in Mapping -> nutze Mapping (kann $or sein)
-    2. Wenn `plz_von` + `plz_bis` gegeben -> nutze als einzelner Range
-    3. Sonst kein PLZ-Filter
-    """
     if provinz and provinz in PROVINZ_PLZ_RANGES:
         ranges = PROVINZ_PLZ_RANGES[provinz]
-        
         if len(ranges) == 1:
             von, bis = ranges[0]
             plz_list = [str(i) for i in range(int(von), int(bis) + 1)]
             return {"plz": {"$in": plz_list}}
-        
-        # Mehrere Ranges -> $or-Konstruktion
         or_filters = []
         for von, bis in ranges:
             plz_list = [str(i) for i in range(int(von), int(bis) + 1)]
             or_filters.append({"plz": {"$in": plz_list}})
         return {"$or": or_filters}
-    
-    # Fallback: alter plz_von/plz_bis-Stil (Backwards-Compat)
     if plz_von and plz_bis:
         plz_list = [str(i) for i in range(int(plz_von), int(plz_bis) + 1)]
         return {"plz": {"$in": plz_list}}
-    
     return None
 
 
@@ -64,14 +48,11 @@ def build_plz_filter(provinz=None, plz_von=None, plz_bis=None):
 def upload():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-    
     file = request.files['file']
     file_id = str(uuid.uuid4())
     pdf_storage[file_id] = file.read()
-    
     base_url = os.environ.get('BASE_URL', request.host_url.rstrip('/'))
     url = f"{base_url}/download/{file_id}"
-    
     return jsonify({'url': url, 'id': file_id})
 
 
@@ -79,7 +60,6 @@ def upload():
 def download(file_id):
     if file_id not in pdf_storage:
         return jsonify({'error': 'File not found'}), 404
-    
     return send_file(
         io.BytesIO(pdf_storage[file_id]),
         mimetype='application/pdf',
@@ -91,42 +71,33 @@ def download(file_id):
 @app.route('/search', methods=['POST'])
 def search():
     data = request.json or {}
-    
     suchbegriff = data.get('suchbegriff', '')
     segment = data.get('segment')
     region = data.get('region')
-    provinz = data.get('provinz')           # NEU
-    nace_codes = data.get('nace_codes', []) # NEU
-    plz_von = data.get('plz_von')           # Backwards-Compat
-    plz_bis = data.get('plz_bis')           # Backwards-Compat
+    provinz = data.get('provinz')
+    nace_codes = data.get('nace_codes', [])
+    plz_von = data.get('plz_von')
+    plz_bis = data.get('plz_bis')
     top_k = int(data.get('limit', 50))
-    min_score = float(data.get('min_score', 0.0))  # NEU
+    min_score = float(data.get('min_score', 0.0))
     
     if not suchbegriff:
         return jsonify({'error': 'suchbegriff is required'}), 400
     
-    # === Sub-Filter sammeln ===
     sub_filters = []
-    
     if segment and segment.strip():
         sub_filters.append({'segment': segment.strip()})
-    
     if region and region.strip():
         sub_filters.append({'region': region.strip()})
-    
     if nace_codes:
-        # Auch single string akzeptieren
         nace_arr = nace_codes if isinstance(nace_codes, list) else [nace_codes]
-        # Strings normalisieren (falls Punkte oder Whitespace drin)
         nace_arr = [str(c).replace('.', '').strip() for c in nace_arr if c]
         if nace_arr:
             sub_filters.append({'nace_codes': {'$in': nace_arr}})
-    
     plz_filter = build_plz_filter(provinz=provinz, plz_von=plz_von, plz_bis=plz_bis)
     if plz_filter:
         sub_filters.append(plz_filter)
     
-    # === Filter kombinieren ===
     if not sub_filters:
         filter_dict = None
     elif len(sub_filters) == 1:
@@ -134,7 +105,6 @@ def search():
     else:
         filter_dict = {'$and': sub_filters}
     
-    # === Embedding für Suchbegriff erzeugen ===
     embedding_response = pc.inference.embed(
         model="llama-text-embed-v2",
         inputs=[suchbegriff],
@@ -142,27 +112,18 @@ def search():
     )
     query_vector = embedding_response.data[0].values
     
-    # === Pinecone Query ===
-    query_params = {
-        "vector": query_vector,
-        "top_k": top_k,
-        "include_metadata": True
-    }
+    query_params = {"vector": query_vector, "top_k": top_k, "include_metadata": True}
     if filter_dict:
         query_params["filter"] = filter_dict
     
     results = index.query(**query_params)
     
-    # === Score-Filter clientseitig ===
     hits = []
     for match in results.matches:
         score = float(match.score)
         if score < min_score:
             continue
-        hits.append({
-            'score': score,
-            **match.metadata
-        })
+        hits.append({'score': score, **match.metadata})
     
     return jsonify({
         'count': len(hits),
@@ -203,6 +164,78 @@ def debug_plz():
         for m in results.matches
     ]
     return jsonify({"samples": plz_samples})
+
+
+@app.route('/debug-nace', methods=['GET'])
+def debug_nace():
+    """
+    Inventur aller NACE-Codes in der Pinecone-DB.
+    Optionale Query-Params:
+      - prefix=20    -> nur Codes die mit '20' anfangen
+      - prefix=412   -> nur Codes die mit '412' anfangen
+      - segment=Chemie -> nur dieses Segment
+      - limit=5000   -> wie viele Records sampeln (default 5000, max 10000)
+    """
+    prefix = request.args.get('prefix', '').strip()
+    segment = request.args.get('segment', '').strip()
+    limit = min(int(request.args.get('limit', 5000)), 10000)
+    
+    filter_dict = {}
+    if segment:
+        filter_dict['segment'] = segment
+    if prefix:
+        if len(prefix) >= 5:
+            possible_codes = [prefix[:5]]
+        else:
+            remaining = 5 - len(prefix)
+            possible_codes = [prefix + str(i).zfill(remaining) for i in range(10**remaining)]
+        filter_dict['nace_codes'] = {'$in': possible_codes}
+    
+    results = index.query(
+        vector=[0.0] * 1024,
+        top_k=limit,
+        include_metadata=True,
+        filter=filter_dict if filter_dict else None
+    )
+    
+    from collections import Counter
+    code_counter = Counter()
+    sample_firmen = {}
+    
+    for m in results.matches:
+        code = m.metadata.get('nace_codes', '')
+        if not code:
+            continue
+        code = str(code).strip()
+        if prefix and not code.startswith(prefix):
+            continue
+        code_counter[code] += 1
+        if code not in sample_firmen:
+            sample_firmen[code] = {
+                'firma': m.metadata.get('firma', ''),
+                'stadt': m.metadata.get('stadt', ''),
+                'plz': m.metadata.get('plz', ''),
+                'segment': m.metadata.get('segment', '')
+            }
+    
+    sorted_codes = [
+        {
+            'nace_code': code,
+            'count': count,
+            'beispiel_firma': sample_firmen[code]['firma'],
+            'beispiel_stadt': sample_firmen[code]['stadt'],
+            'beispiel_plz': sample_firmen[code]['plz'],
+            'segment': sample_firmen[code]['segment']
+        }
+        for code, count in code_counter.most_common()
+    ]
+    
+    return jsonify({
+        'total_records_sampled': len(results.matches),
+        'unique_nace_codes': len(code_counter),
+        'filter_applied': filter_dict,
+        'codes': sorted_codes
+    })
 
 
 @app.route('/logo.jpg')
