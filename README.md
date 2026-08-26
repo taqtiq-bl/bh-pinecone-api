@@ -14,8 +14,8 @@
 ### 3. Environment Variables setzen
 In Railway → Variables:
 ```
-PINECONE_API_KEY = pcsk_45ebCS_Mp9juMT6tnfSBuhirU1AxS9MMymec3uMU7xNeptK6zpmWYUjeGa6iicF54MgWth
-PINECONE_HOST = https://kbo-firmen-v2-ldtc8br.svc.aped-4627-b74a.pinecone.io
+PINECONE_API_KEY = <dein Pinecone API Key — nur in Railway Variables, nie ins Repo>
+PINECONE_HOST = <dein Pinecone Index Host>
 ```
 
 ### 4. Deploy
