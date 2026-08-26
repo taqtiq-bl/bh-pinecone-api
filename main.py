@@ -139,7 +139,12 @@ def search():
     if region and region.strip():
         sub_filters.append({'region': region.strip()})
     if nace_arr:
-        sub_filters.append({'nace_codes': {'$in': nace_arr}})
+        # nace_list ist ein Array einzelner Codes (seit Metadata-Fix) -- $in matcht pro Element.
+        # Fallback nace_codes deckt Alt-Records mit genau einem Code (exakter String-Match).
+        sub_filters.append({'$or': [
+            {'nace_list': {'$in': nace_arr}},
+            {'nace_codes': {'$in': nace_arr}},
+        ]})
     plz_filter = build_plz_filter(provinz=provinz, plz_von=plz_von, plz_bis=plz_bis)
     if plz_filter:
         sub_filters.append(plz_filter)
